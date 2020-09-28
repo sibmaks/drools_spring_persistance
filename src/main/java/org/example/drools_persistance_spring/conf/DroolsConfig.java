@@ -74,7 +74,8 @@ public class DroolsConfig {
         droolsEntityManagerFactory.setPersistenceUnitName("drools.cookbook.persistence.jpa");
         droolsEntityManagerFactory.afterPropertiesSet();
 
-        JpaTransactionManager jpaTransactionManager = new JpaTransactionManager(droolsEntityManagerFactory.getNativeEntityManagerFactory());
+        JpaTransactionManager jpaTransactionManager = new JpaTransactionManager(droolsEntityManagerFactory.getObject());
+        jpaTransactionManager.setNestedTransactionAllowed(false);
         jpaTransactionManager.afterPropertiesSet();
 
         Environment environment = kieServices.newEnvironment();

@@ -40,6 +40,29 @@ public class DroolsServiceTest {
     private DroolsService droolsService;
 
     @Test
+    public void singleSessionWritesTest() throws InterruptedException {
+        Executor executor = Executors.newFixedThreadPool(16);
+        String id = UUID.randomUUID().toString();
+        AtomicInteger counter = new AtomicInteger();
+        AtomicInteger finished = new AtomicInteger();
+        long time = System.currentTimeMillis();
+        for(int i = 0; i < COUNT; i++) {
+            executor.execute(() -> {
+                droolsService.processFacts(id, new LongFact(counter.incrementAndGet()));
+                finished.incrementAndGet();
+            });
+        }
+        while (finished.get() != COUNT) {
+            TimeUnit.MILLISECONDS.sleep(100);
+        }
+        long end = System.currentTimeMillis();
+        log.info("{} execution time. {} op per second", (end - time), (0.0 + end - time) / COUNT);
+
+        Assert.assertEquals(COUNT, droolsService.sessionDump(id).stream().filter(it -> it instanceof LongFact).count());
+        Assert.assertEquals(COUNT, droolsService.processQuery(id, "getLongs").size());
+    }
+
+    @Test
     public void multipleWritesTest() throws InterruptedException {
         Random random = new Random();
         Executor executor = Executors.newFixedThreadPool(16);
@@ -74,7 +97,7 @@ public class DroolsServiceTest {
 
     @Test
     public void checkStored() {
-        String id = "7e6baca4-b88a-4707-8aaf-610f4e2cc4db";
+        String id = "dfd64fbe-4fb8-4097-a32a-7d2d33334025";
         Assert.assertEquals(COUNT, droolsService.sessionDump(id).stream().filter(it -> it instanceof LongFact).count());
         Assert.assertEquals(COUNT, droolsService.processQuery(id, "getLongs").size());
     }
