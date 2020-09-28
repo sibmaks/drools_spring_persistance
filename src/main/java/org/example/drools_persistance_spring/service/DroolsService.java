@@ -16,8 +16,8 @@ import org.kie.internal.command.CommandFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import javax.transaction.Transactional;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -78,7 +78,7 @@ public class DroolsService {
 
     public QueryResults processQuery(String externalId, String query, Object ... args) {
         log.info("**** Access to session for client: {}", externalId);
-        KieSessionContainer kieSession = getOrCreate(externalId);
+        KieSessionContainer kieSession = droolsService.getOrCreate(externalId);
         log.info("**** Execute query in session for client: {}", externalId);
         kieSession.getLock().lock();
         try {
@@ -106,8 +106,7 @@ public class DroolsService {
                     } else {
                         log.info("**** Restore session for client: {}", externalId);
                         try {
-                            kieSession = kieStoreServices.loadKieSession(clientKieSession.getSessionIdentifier(),
-                                    kieBase, kieSessionConfiguration, environment);
+                            kieSession = droolsService.loadSession(clientKieSession.getSessionIdentifier());
                         } catch (Exception e) {
                             log.error("**** Restore session for error, create new session", e);
                             clientKieSessionRepository.delete(clientKieSession);
@@ -133,6 +132,11 @@ public class DroolsService {
         clientKieSession.setCreated(Timestamp.valueOf(LocalDateTime.now()));
         clientKieSessionRepository.save(clientKieSession);
         return kieSession;
+    }
+
+    @Transactional
+    protected KieSession loadSession(long identifier) {
+        return kieStoreServices.loadKieSession(identifier, kieBase, kieSessionConfiguration, environment);
     }
 
     public List<Object> sessionDump(String externalId) {

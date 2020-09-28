@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -73,13 +74,22 @@ public class DroolsServiceTest {
         AtomicInteger counter = new AtomicInteger();
         AtomicInteger finished = new AtomicInteger();
         long time = System.currentTimeMillis();
+        AtomicBoolean exception = new AtomicBoolean();
         for(int i = 0; i < COUNT; i++) {
             executor.execute(() -> {
-                droolsService.processFacts(ids.get(random.nextInt(ids.size())), new LongFact(counter.incrementAndGet()));
-                finished.incrementAndGet();
+                if(exception.get()) {
+                    return;
+                }
+                try {
+                    droolsService.processFacts(ids.get(random.nextInt(ids.size())), new LongFact(counter.incrementAndGet()));
+                    finished.incrementAndGet();
+                } catch (Exception e) {
+                    log.error(e.getMessage(), e);
+                    exception.set(true);
+                }
             });
         }
-        while (finished.get() != COUNT) {
+        while (finished.get() != COUNT && !exception.get()) {
             TimeUnit.MILLISECONDS.sleep(100);
         }
         long end = System.currentTimeMillis();
