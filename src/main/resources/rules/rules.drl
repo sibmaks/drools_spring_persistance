@@ -1,0 +1,147 @@
+package org.example.rules;
+
+import org.example.facts.data.Commission
+import org.example.facts.data.CommissionFree
+import org.example.facts.data.Deposit
+import org.example.facts.data.Wallet
+import org.example.facts.data.LongFact
+import org.example.facts.notification.DepositChargeErrorNotification
+import org.example.facts.notification.Notification
+import java.math.BigDecimal
+import java.time.LocalDateTime
+
+query getWallet(long walletId)
+    wallet: Wallet(id == walletId)
+end
+
+query getLongs()
+    val: LongFact()
+end
+
+declare Notification
+    @role( event )
+    @expires( 1m )
+end
+
+declare Deposit
+    @role( event )
+    @expires( 1m )
+end
+
+declare Commission
+    @role( event )
+    @expires( 5m )
+end
+
+declare Now
+   time: long
+end
+
+declare CommissionFreeWallet
+    wallet: Wallet
+end
+
+rule "Init Now"
+when
+  not(Now())
+then
+ Now now = new Now();
+ now.setTime(drools.getKieRuntime().getSessionClock().getCurrentTime());
+ insert(now);
+end
+
+rule "Update Now"
+  timer ( int: 0 1m )
+when
+  $now: Now()
+then
+  $now.setTime(drools.getKieRuntime().getSessionClock().getCurrentTime());
+  update($now)
+end
+
+rule "Wrap wallet as commission free"
+when
+    $c: CommissionFree()
+    $w: Wallet(clientId == $c.clientId, id == $c.walletId)
+    not(CommissionFreeWallet(wallet == $w))
+then
+    insert(new CommissionFreeWallet($w));
+    retract($c)
+end
+
+rule "Remove doublicates commission free"
+when
+    $c: CommissionFree()
+    $w: Wallet(clientId == $c.clientId, id == $c.walletId)
+    CommissionFreeWallet(wallet == $w)
+then
+    retract($c)
+end
+
+rule "Get commission for big deposit"
+when
+    $deposit: Deposit(status == "succeeded", amount >= 1000, currency in ('USD', 'EUR'))
+    $wallet: Wallet(clientId == $deposit.clientId, currency == $deposit.currency)
+    not(CommissionFreeWallet(wallet == $wallet))
+    not(Commission(deposit == $deposit))
+then
+    BigDecimal commission = new BigDecimal("0.05").multiply($deposit.getAmount());
+    insert(new Commission($deposit, commission, $deposit.getCurrency()));
+end
+
+rule "Charge succeded deposit"
+when
+    $deposit: Deposit(status == "succeeded")
+    $wallet: Wallet(clientId == $deposit.clientId, currency == $deposit.currency)
+then
+    BigDecimal balance = $wallet.getBalance();
+    balance = balance == null ? BigDecimal.ZERO : balance;
+    balance = balance.add($deposit.getAmount());
+    modify($wallet) {
+        setBalance(balance),
+        setModified(LocalDateTime.now())
+    }
+    retract($deposit)
+end
+
+rule "Retract commission from wallet"
+when
+    $c : Commission()
+    $wallet: Wallet(clientId == $c.deposit.clientId, currency == $c.currency)
+    not(CommissionFreeWallet(wallet == $wallet))
+then
+    BigDecimal balance = $wallet.getBalance();
+    balance = balance == null ? BigDecimal.ZERO : balance;
+    balance = balance.subtract($c.getAmount());
+    modify($wallet) {
+        setBalance(balance),
+        setModified(LocalDateTime.now())
+    }
+    retract($c)
+end
+
+rule "Notify about wrong currency deposits"
+when
+    $deposit: Deposit(status == "succeeded")
+    $wallet: Wallet(clientId == $deposit.clientId)
+    not(Wallet(clientId == $deposit.clientId, currency == $deposit.currency))
+then
+    insert(new DepositChargeErrorNotification($deposit, "Client " + $deposit.getClientId() + " hasn't " + $deposit.getCurrency() + " wallet"));
+    retract($deposit);
+end
+
+rule "Notify about deposit unknown client"
+when
+    $deposit: Deposit(status == "succeeded")
+    not(Wallet(clientId == $deposit.clientId))
+then
+    insert(new DepositChargeErrorNotification($deposit, "Client " + $deposit.getClientId() + " not exist"));
+    retract($deposit);
+end
+
+rule "Remove empty wallets"
+when
+    $w: Wallet(id <= 0)
+then
+    retract($w);
+end
