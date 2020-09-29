@@ -2,14 +2,13 @@ package org.example.drools_persistance_spring.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.example.drools_persistance_spring.Application;
-import org.example.drools_persistance_spring.conf.DataSourceStub;
 import org.example.facts.data.LongFact;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -32,10 +31,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RunWith(SpringRunner.class)
 @SpringBootTest(classes = Application.class)
 @ContextConfiguration(classes = Application.class)
-@Import(DataSourceStub.class)
 public class DroolsServiceTest {
 
-    private static final int COUNT = 2500;
+    private static final int COUNT = 10_000;
 
     @Autowired
     private DroolsService droolsService;
@@ -106,8 +104,9 @@ public class DroolsServiceTest {
     }
 
     @Test
+    @Ignore("Just for rechecks")
     public void checkStored() {
-        String id = "dfd64fbe-4fb8-4097-a32a-7d2d33334025";
+        String id = "236b19fa-81fb-41b8-b59b-0b7654c5921d";
         Assert.assertEquals(COUNT, droolsService.sessionDump(id).stream().filter(it -> it instanceof LongFact).count());
         Assert.assertEquals(COUNT, droolsService.processQuery(id, "getLongs").size());
     }
